@@ -1,0 +1,49 @@
+# Three local models served by one Ollama instance (https://ollama.com).
+#
+#   ollama pull qwen2.5:0.5b && ollama pull qwen2.5:3b && ollama pull qwen2.5:7b
+#
+# Ollama only keeps several models loaded and serves requests in parallel if
+# you allow it, so start it with for example:
+#
+#   OLLAMA_MAX_LOADED_MODELS=3 OLLAMA_NUM_PARALLEL=4 ollama serve
+#
+# then: triage serve -c examples/ollama.yaml
+
+host: 127.0.0.1
+port: 8080
+queue_timeout_s: 60
+
+policy:
+  latency_slo_s: 15          # a predicted latency of 15 s costs one point in the score
+  shed_low_at: 0.8           # reject low-priority work when the fleet is 80% busy
+  cpu_pressure_start: 75     # start steering away from heavy local models above 75% CPU
+  ram_pressure_start_mb: 2048
+
+breaker:
+  failure_threshold: 3
+  cooldown_s: 20
+
+backends:
+  - name: small
+    url: http://127.0.0.1:11434/v1
+    model: qwen2.5:0.5b
+    tier: 1
+    max_concurrency: 4
+    weight: 0.2              # light on RAM/CPU
+    prior_s_per_token: 0.006
+
+  - name: medium
+    url: http://127.0.0.1:11434/v1
+    model: qwen2.5:3b
+    tier: 2
+    max_concurrency: 2
+    weight: 0.5
+    prior_s_per_token: 0.015
+
+  - name: large
+    url: http://127.0.0.1:11434/v1
+    model: qwen2.5:7b
+    tier: 3
+    max_concurrency: 1
+    weight: 1.0
+    prior_s_per_token: 0.035
